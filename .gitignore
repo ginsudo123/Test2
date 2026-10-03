@@ -1,0 +1,31 @@
+# Ignore raw source code directories (encrypted into test.enc & app.enc)
+/code/
+/android_app/
+Amazon/
+main.py
+config.json
+www.amazon.in.cookies.json
+chrome_profile/
+chrome_profile.tar.gz
+profile.enc
+README.md
+README*
+
+# Local environment & helper scripts
+.env
+encrypt_code.py
+encrypt_app.py
+decrypt_app.py
+package_profile.py
+
+# Python & build caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.DS_Store
+
+# Explicitly track encrypted archives
+!test.enc
+!app.enc

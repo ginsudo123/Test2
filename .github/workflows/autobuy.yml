@@ -1,0 +1,110 @@
+name: Amazon Auto-Buy Deal Monitor
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Telegram Deal Channel URL to monitor'
+        required: false
+        default: 'https://telegram.me/s/tamazonnnnn'
+      min_discount:
+        description: 'Minimum Discount Percentage to trigger auto-checkout'
+        required: false
+        default: '85'
+      runtime:
+        description: 'Execution duration (e.g. 3h55m, 4h55m)'
+        required: false
+        default: '3h55m'
+
+jobs:
+  autobuy:
+    name: Run Auto-Buy Monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install System Dependencies, XRDP & Virtual Desktop
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb fluxbox xrdp
+          # Configure XRDP user session
+          echo "fluxbox" > ~/.xsession
+          sudo systemctl start xrdp || sudo /etc/init.d/xrdp start || true
+
+          # Start Xvfb virtual frame buffer on :99
+          Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+          sleep 2
+
+          # Start lightweight window manager
+          DISPLAY=:99 fluxbox > /dev/null 2>&1 &
+          sleep 1
+
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+          echo "Virtual desktop initialized on DISPLAY=:99 with XRDP running"
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch Encrypted Chrome Profile from GitHub Releases
+        run: |
+          echo "Checking for encrypted Chrome profile (profile.enc) to protect session data and avoid Git LFS..."
+          gh release download v1.0.0 -p "profile.enc" --repo "${{ github.repository }}" 2>/dev/null || \
+          curl -sL "https://github.com/${{ github.repository }}/releases/download/v1.0.0/profile.enc" -o profile.enc 2>/dev/null || true
+          if [ -f "profile.enc" ]; then
+            echo "Successfully retrieved encrypted profile.enc from GitHub Releases."
+          elif gh release download v1.0.0 -p "chrome_profile.tar.gz" --repo "${{ github.repository }}" 2>/dev/null || \
+               curl -sL "https://github.com/${{ github.repository }}/releases/download/v1.0.0/chrome_profile.tar.gz" -o chrome_profile.tar.gz 2>/dev/null; then
+            echo "Retrieved fallback unencrypted chrome_profile.tar.gz from GitHub Releases."
+          else
+            echo "No profile release asset found. Will initialize clean session using MongoDB cookies."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Run Amazon Auto-Buy Deal Monitor
+        env:
+          AES_SECRET_KEY: ${{ secrets.AES_SECRET_KEY }}
+          AMAZON_PASSWORD: ${{ secrets.AMAZON_PASSWORD }}
+          MONGO_DB_URL: ${{ secrets.MONGO_DB_URL }}
+          DISPLAY: ":99"
+          HEADLESS: "false"
+        run: |
+          CHANNEL="${{ inputs.channel || 'https://telegram.me/s/tamazonnnnn' }}"
+          MIN_DISCOUNT="${{ inputs.min_discount || '85' }}"
+          RUNTIME="${{ inputs.runtime || '3h55m' }}"
+
+          echo "=========================================="
+          echo "Starting Amazon Auto-Buy Pipeline"
+          echo "Display:      $DISPLAY"
+          echo "Channel:      $CHANNEL"
+          echo "Min Discount: $MIN_DISCOUNT%"
+          echo "Runtime:      $RUNTIME"
+          echo "Mode:         Headed (with automatic headless fallback)"
+          echo "=========================================="
+
+          # Try headed mode on virtual desktop first; fallback to headless if it encounters an error
+          python runner.py \
+            --channel "$CHANNEL" \
+            --min-discount "$MIN_DISCOUNT" \
+            --runtime "$RUNTIME" \
+            --no-headless || {
+              echo "⚠️ Headed execution encountered an issue. Falling back to HEADLESS mode..."
+              python runner.py \
+                --channel "$CHANNEL" \
+                --min-discount "$MIN_DISCOUNT" \
+                --runtime "$RUNTIME" \
+                --headless
+            }

@@ -4,19 +4,6 @@ on:
   schedule:
     - cron: '0 */4 * * *'
   workflow_dispatch:
-    inputs:
-      channel:
-        description: 'Telegram Deal Channel URL to monitor'
-        required: false
-        default: 'https://telegram.me/s/dealsandshit'
-      min_discount:
-        description: 'Minimum Discount Percentage to trigger auto-checkout'
-        required: false
-        default: '85'
-      runtime:
-        description: 'Execution duration (e.g. 3h55m, 4h55m)'
-        required: false
-        default: '3h55m'
 
 jobs:
   autobuy:
@@ -79,32 +66,19 @@ jobs:
           AES_SECRET_KEY: ${{ secrets.AES_SECRET_KEY }}
           AMAZON_PASSWORD: ${{ secrets.AMAZON_PASSWORD }}
           MONGO_DB_URL: ${{ secrets.MONGO_DB_URL }}
+          TELEGRAM_SESSION_STRING: ${{ secrets.TELEGRAM_SESSION_STRING }}
           DISPLAY: ":99"
           HEADLESS: "false"
         run: |
-          CHANNEL="${{ inputs.channel || 'https://telegram.me/s/dealsandshit' }}"
-          MIN_DISCOUNT="${{ inputs.min_discount || '85' }}"
-          RUNTIME="${{ inputs.runtime || '3h55m' }}"
-
           echo "=========================================="
           echo "Starting Amazon Auto-Buy Pipeline"
           echo "Display:      $DISPLAY"
-          echo "Channel:      $CHANNEL"
-          echo "Min Discount: $MIN_DISCOUNT%"
-          echo "Runtime:      $RUNTIME"
+          echo "Configuration: Loaded directly from config.json"
           echo "Mode:         Headed (with automatic headless fallback)"
           echo "=========================================="
 
-          # Try headed mode on virtual desktop first; fallback to headless if it encounters an error
-          python runner.py \
-            --channel "$CHANNEL" \
-            --min-discount "$MIN_DISCOUNT" \
-            --runtime "$RUNTIME" \
-            --no-headless || {
-              echo "⚠️ Headed execution encountered an issue. Falling back to HEADLESS mode..."
-              python runner.py \
-                --channel "$CHANNEL" \
-                --min-discount "$MIN_DISCOUNT" \
-                --runtime "$RUNTIME" \
-                --headless
-            }
+          # All parameters (channels list, discount, runtime) are loaded from config.json
+          python runner.py --no-headless || {
+            echo "⚠️ Headed execution encountered an issue. Falling back to HEADLESS mode..."
+            python runner.py --headless
+          }

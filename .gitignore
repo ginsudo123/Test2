@@ -17,6 +17,9 @@ encrypt_code.py
 encrypt_app.py
 decrypt_app.py
 package_profile.py
+login_telegram.py
+*.session
+*.session-journal
 
 # Python & build caches
 __pycache__/
